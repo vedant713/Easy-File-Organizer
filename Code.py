@@ -2,13 +2,25 @@ import os
 import shutil
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, QProgressBar
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
+import matplotlib.pyplot as plt
 
 class FileOrganizerThread(QThread):
     progress_updated = pyqtSignal(int, int)  # Signal to update progress (current, total)
+    category_counts_updated = pyqtSignal(dict)  # Signal to update category counts
 
     def __init__(self, directory):
         super().__init__()
         self.directory = directory
+        self.category_counts = {
+            'Documents': 0,
+            'Images': 0,
+            'Audio': 0,
+            'Video': 0,
+            'Archives': 0,
+            'Executables': 0,
+            'Misc': 0,
+            'Folders': 0
+        }
 
     def run(self):
         try:
@@ -53,6 +65,7 @@ class FileOrganizerThread(QThread):
                     # Move the file to the corresponding directory
                     shutil.move(file, os.path.join(category, file))
                     moved = True
+                    self.category_counts[category] += 1
                     break
 
             # If file does not match any category, move it to Misc
@@ -60,9 +73,11 @@ class FileOrganizerThread(QThread):
                 if not os.path.exists('Misc'):
                     os.makedirs('Misc')
                 shutil.move(file, os.path.join('Misc', file))
+                self.category_counts['Misc'] += 1
 
             current_file += 1
             self.progress_updated.emit(current_file, total_files)
+            self.category_counts_updated.emit(self.category_counts)
 
         # Group folders separately
         folders = [d for d in os.listdir() if os.path.isdir(d) and d not in categories.keys() and d != 'Misc']
@@ -73,6 +88,8 @@ class FileOrganizerThread(QThread):
                 # Avoid moving already grouped directories
                 if folder not in categories and folder != 'Folders' and folder != 'Misc':
                     shutil.move(folder, os.path.join('Folders', folder))
+                    self.category_counts['Folders'] += 1
+                    self.category_counts_updated.emit(self.category_counts)
 
 
 class FileOrganizerApp(QWidget):
@@ -82,7 +99,7 @@ class FileOrganizerApp(QWidget):
 
     def initUI(self):
         self.setWindowTitle('File Organizer')
-        self.setGeometry(100, 100, 400, 200)
+        self.setGeometry(100, 100, 600, 400)
 
         self.folder_path_label = QLabel('Select a directory to organize:')
         self.browse_button = QPushButton('Browse', self)
@@ -95,12 +112,17 @@ class FileOrganizerApp(QWidget):
         self.progress_bar = QProgressBar(self)
         self.progress_bar.setValue(0)
 
+        self.categories_label = QLabel('Category Counts:')
+        self.categories_info = QLabel('')
+        
         layout = QVBoxLayout()
         layout.addWidget(self.folder_path_label)
         layout.addWidget(self.browse_button)
         layout.addWidget(self.organize_button)
         layout.addWidget(self.progress_label)
         layout.addWidget(self.progress_bar)
+        layout.addWidget(self.categories_label)
+        layout.addWidget(self.categories_info)
 
         self.setLayout(layout)
 
@@ -118,6 +140,7 @@ class FileOrganizerApp(QWidget):
             self.progress_bar.setValue(0)
             self.organizer_thread = FileOrganizerThread(self.directory_path)
             self.organizer_thread.progress_updated.connect(self.update_progress)
+            self.organizer_thread.category_counts_updated.connect(self.update_category_info)
             self.organizer_thread.start()
         else:
             QMessageBox.warning(self, 'Warning', 'Please select a directory first.')
@@ -128,6 +151,13 @@ class FileOrganizerApp(QWidget):
         if progress == 100:
             QMessageBox.information(self, 'Success', 'Files and folders have been grouped by their type.')
             self.organize_button.setEnabled(True)
+
+    def update_category_info(self, category_counts):
+        info_text = ''
+        for category, count in category_counts.items():
+            info_text += f'{category}: {count}\n'
+        
+        self.categories_info.setText(info_text.strip())
 
 if __name__ == '__main__':
     import sys
