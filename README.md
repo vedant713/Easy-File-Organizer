@@ -16,7 +16,7 @@ Easy File Organizer is a desktop application built with Python and PyQt5 that or
 ## Installation
 
 1. Clone the repository:
-git clone https://github.com/your-username/file-organizer.git
+git clone https://github.com/vedant713/file-organizer.git
 
 2. Install dependencies:
 pip install -r requirements.txt
